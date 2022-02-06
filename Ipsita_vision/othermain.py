@@ -25,7 +25,8 @@ import glob
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
+cap.set(cv2.CAP_PROP_EXPOSURE,-13)
 
 
 def nothing(x):
@@ -33,7 +34,7 @@ def nothing(x):
 
 
 cv2.namedWindow("HSV Adjustments")
-cv2.namedWindow("Contour Adjustment")
+cv2.namedWindow("Contour Adjustments")
 
 cv2.createTrackbar("Lower_H", "HSV Adjustments", 0, 255, nothing)
 cv2.createTrackbar("Lower_S", "HSV Adjustments", 0, 255, nothing)
@@ -53,6 +54,9 @@ while True:
     cam_y = int((h / 2) - 0.5)
     cam_center = (cam_x, cam_y)
     cv2.circle(frame, cam_center, 7, (0, 255, 0), -1)
+
+    FOV_x = 2 * math.atan(w/config.focal_x)  #in pixels
+    FOV_y = 2 * math.atan(h/config.focal_y)  #in pixels
 
     img = frame.copy()
     blur = cv2.blur(img, (4, 4))
@@ -74,7 +78,7 @@ while True:
     upper_bound = np.array([u_h, u_s, u_v])
 
     #mask = cv2.inRange(hsv, lower_bound, upper_bound)
-    mask = cv2.inRange(hsv, (0,181,214), (255,233,255))
+    mask = cv2.inRange(hsv, (0,123,64), (109,255,255))
     result = cv2.bitwise_and(frame, frame, mask=mask)
 
     # find all lemon contours in mask
@@ -102,21 +106,29 @@ while True:
             cx, cy = 0, 0
         center = (cx, cy)
 
-        yaw_angle = math.degrees(math.atan((cx - cam_x) / config.focal_x))
-        '''
+        #w= 1080
+        #h = 720
         if (cy - cam_y != 0):
-            pitch_angle = -math.degrees(math.atan((cy - cam_y) / config.focal_y))
-            x_dist_to_target = abs(config.tall_hub_height / (math.tan(pitch_angle)))
+            pitch_angle = (FOV_y / h) * (cy - cam_y) + config.mount_angle
+            front_dist = abs(config.tall_hub_height / math.tan(pitch_angle))
+        if (cx - cam_x != 0):
+            yaw_angle = (FOV_x / w) * (cx - cam_x)
+            side_dist = abs(front_dist / (math.tan(yaw_angle)))
         else:
-            x_dist_to_target = 0
+            yaw_angle = 0
+        yaw_angle_d = math.degrees(yaw_angle)
 
-        vert_dist_to_target = abs(config.tall_hub_height * math.sin(pitch_angle))
-        y_dist_to_target = math.sqrt(
-            (abs((vert_dist_to_target * vert_dist_to_target) - (x_dist_to_target * x_dist_to_target))))
+        pitch_angle_d = -math.degrees(pitch_angle)
 
-        print("pitch: " + str(pitch_angle) + ", yaw: " + str(yaw_angle))
-        print("x_dist: " + str(x_dist_to_target) + ", y-dist: " + str(y_dist_to_target))
-        '''
+
+
+
+            # front_dist_to_target = abs(up_dist_to_target / math.tan(30*(math.pi/180)))
+
+        front_side_triangle_hyp = math.sqrt((side_dist * side_dist) + (front_dist * front_dist))
+
+        linear_dist_to_target = math.sqrt((front_side_triangle_hyp*front_side_triangle_hyp)+
+                                          (config.tall_hub_height*config.tall_hub_height))
 
         x, y, w, h = cv2.boundingRect(c)
         # draw the 'human' contour (in green)
@@ -124,35 +136,20 @@ while True:
         # cv2.drawContours(frame, contours, 0, (0, 255, 0), 3)
         cv2.circle(frame, center, 7, (0, 255, 0), -1)
 
-        up_dist_to_target = config.tall_hub_height
-        if (cy - cam_y != 0):
-            pitch_angle_d = -math.degrees(math.atan((cy - cam_y) / config.focal_y))
-            pitch_angle_r = math.atan((cy - cam_y) / config.focal_y)
-            z_dist = (cy - cam_y) * (config.tape_height / h)
-            left_right_dist = (cx - cam_x) * (config.tape_width / w)
-            front_dist = abs(z_dist / math.tan(pitch_angle_r))
-            # front_dist_to_target = abs(up_dist_to_target / math.tan(30*(math.pi/180)))
-        else:
-            front_dist_to_target = 0
-
-        linear_dist_to_target = math.sqrt(
-            (abs((z_dist * z_dist) + (front_dist * front_dist))))
-
-        print("pitch: " + str(pitch_angle_d) + ", yaw: " + str(yaw_angle))
-        print("front_dist: " + str(front_dist) + ", z_dist: " + str(z_dist) + ", left_right_dist: " + str(
-            left_right_dist))
+        print("pitch: " + str(pitch_angle_d) + ", yaw: " + str(yaw_angle_d))
+        print("front_dist: " + str(front_dist) + ", linear_distance: " + str(linear_dist_to_target))
+        print("FOV: " + str(FOV_x))
 
         # print(config.cam_center)
+        
     '''
+        pitch_angle = math.degrees(math.atan((cy - 243.65759666) / config.focal_len))
+        yaw_angle = math.degrees(math.atan((cx - 293.51663222) / config.focal_len))
 
-
-
-            pitch_angle = math.degrees(math.atan((cy - 243.65759666) / config.focal_len))
-            yaw_angle = math.degrees(math.atan((cx - 293.51663222) / config.focal_len))
-
-            #qprint("area is: " + str(area))
-            #print("centroid is at: " + str(cx) + "," + str(cy))
-            #print("pitch: " + str(pitch_angle) + ", yaw: " + str(yaw_angle))
+        #print("area is: " + str(area))
+        #print("centroid is at: " + str(cx) + "," + str(cy))
+        #print("pitch: " + str(pitch_angle) + ", yaw: " + str(yaw_angle))
+            
     '''
 
     cv2.imshow('Original', frame)
