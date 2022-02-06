@@ -25,7 +25,8 @@ import glob
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
+cap.set(cv2.CAP_PROP_EXPOSURE,-13)
 
 
 def nothing(x):
@@ -33,7 +34,7 @@ def nothing(x):
 
 
 cv2.namedWindow("HSV Adjustments")
-cv2.namedWindow("Contour Adjustment")
+cv2.namedWindow("Contour Adjustments")
 
 cv2.createTrackbar("Lower_H", "HSV Adjustments", 0, 255, nothing)
 cv2.createTrackbar("Lower_S", "HSV Adjustments", 0, 255, nothing)
@@ -52,7 +53,6 @@ while True:
     cam_x = int((w / 2) - 0.5)
     cam_y = int((h / 2) - 0.5)
     cam_center = (cam_x, cam_y)
-    cv2.circle(frame, cam_center, 7, (0, 255, 0), -1)
 
     img = frame.copy()
     blur = cv2.blur(img, (4, 4))
@@ -70,8 +70,11 @@ while True:
     min_thresh = cv2.cv2.getTrackbarPos("min_thresh", "Contour Adjustments")
     max_thresh = cv2.cv2.getTrackbarPos("max_thresh", "Contour Adjustments")
 
-    lower_bound = np.array([l_h, l_s, l_v])
-    upper_bound = np.array([u_h, u_s, u_v])
+    #lower_bound = np.array([l_h, l_s, l_v])
+    #upper_bound = np.array([u_h, u_s, u_v])
+
+    lower_bound = np.array([0, 179, 23])
+    upper_bound = np.array([97, 255, 255])
 
     mask = cv2.inRange(hsv, lower_bound, upper_bound)
     # mask = cv2.inRange(hsv, (18, 108, 255), (100, 180, 255))
@@ -88,11 +91,13 @@ while True:
     # when using the draw rectangle thing use the center coordinates of the largest area
 
     if len(contours) != 0:
+        #print('there are contours')
         # the contours are drawn here
-        # cv2.drawContours(frame, contours, -1, 255, 3)
+        #cv2.drawContours(frame, contours, -1, 255, 3)
 
         # find the biggest area of the contour
         c = max(contours, key=cv2.contourArea)
+        #cv2.drawContours(frame, c, -1, 255, 3)
 
         M = cv2.moments(c)
         if M["m00"] != 0:
@@ -120,7 +125,9 @@ while True:
         '''
         up_dist_to_target = config.tall_hub_height
         if (cy - cam_y != 0):
-            pitch_angle = -math.degrees(math.atan((cy - cam_y) / config.focal_y))
+            pitch_angle = math.atan((cy - cam_y) / config.focal_y) + config.mount_angle
+            #pitch_angle_degrees = -math.degrees(pitch_angle)
+            pitch_angle_degrees = math.degrees(pitch_angle)
             front_dist_to_target = abs(up_dist_to_target / (math.tan(pitch_angle)))
         else:
             front_dist_to_target = 0
@@ -128,13 +135,13 @@ while True:
         linear_dist_to_target = math.sqrt(
             (abs((up_dist_to_target * up_dist_to_target) + (front_dist_to_target * front_dist_to_target))))
 
-        print("pitch: " + str(pitch_angle) + ", yaw: " + str(yaw_angle))
+        print("pitch: " + str(pitch_angle_degrees) + ", yaw: " + str(yaw_angle))
         print("front_dist: " + str(front_dist_to_target) + ", linear_dist: " + str(linear_dist_to_target))
         x, y, w, h = cv2.boundingRect(c)
         # draw the 'human' contour (in green)
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 7)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 1)
         # cv2.drawContours(frame, contours, 0, (0, 255, 0), 3)
-        cv2.circle(frame, center, 7, (0, 255, 0), -1)
+        cv2.circle(frame, center, 1, (0, 255, 255), -1)
 
         # print(config.cam_center)
     '''
@@ -148,6 +155,7 @@ while True:
             #print("centroid is at: " + str(cx) + "," + str(cy))
             #print("pitch: " + str(pitch_angle) + ", yaw: " + str(yaw_angle))
     '''
+    cv2.circle(frame, cam_center, 7, (0, 255, 0), -1)
 
     cv2.imshow('Original', frame)
     cv2.imshow('Mask', mask)
@@ -160,4 +168,3 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
-
