@@ -115,11 +115,11 @@ while True:
 
         # Use dot product to find the angle between the two rays
         cos_angle = r1.dot(r2) / (np.linalg.norm(r1) * np.linalg.norm(r2))
-        angle_radians = np.acos(cos_angle)
+        #angle_radians = np.acos(cos_angle)
 
         # Find the distance to the target. This calculation is dependent upon the assumption that the angles and
         # distance are on a plane that is parallel to the top of the hub; we have not yet considered height
-        frontal_dist_to_target = config.tall_hub_radius / math.tan(angle_radians)
+        frontal_dist_to_target = config.tall_hub_radius / math.tan(cos_angle/2)
 
         # Using pythagorean thm to find the linear, straight-line distance to target
         linear_dist_to_target = math.sqrt((frontal_dist_to_target * frontal_dist_to_target)
