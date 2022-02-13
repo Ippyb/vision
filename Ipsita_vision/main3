@@ -12,9 +12,10 @@ import config
 import numpy as np
 import cv2
 import glob
+import calibrate2
 
 
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_EXPOSURE,-13)
 
 
@@ -35,6 +36,17 @@ cv2.createTrackbar("Upper_V", "HSV Adjustments", 0, 255, nothing)
 cv2.createTrackbar("min_thresh", "Contour Adjustments", 0, 300, nothing)
 cv2.createTrackbar("max_thresh", "Contour Adjustments", 0, 300, nothing)
 
+theta = math.pi/8
+r = config.tall_hub_radius
+
+objpoints = [((r*math.cos(10*theta)), (r*math.sin(10*theta)), 0)
+             ((r*math.cos(11*theta)), (r*math.sin(11*theta)), 0)
+             ((r * math.cos(12 * theta)), (r * math.sin(12 * theta)), 0)
+             ((r * math.cos(13 * theta)), (r * math.sin(13 * theta)), 0)
+             #((r * math.cos(14 * theta)), (r * math.sin(14 * theta)), 0)
+             #((r * math.cos(15 * theta)), (r * math.sin(15 * theta)), 0)
+]
+
 while True:
 
     ret, frame = cap.read()
@@ -42,13 +54,11 @@ while True:
     cam_x = int((w / 2) - 0.5)
     cam_y = int((h / 2) - 0.5)
     cam_center = (cam_x, cam_y)
-    cv2.circle(frame, cam_center, 7, (0, 255, 0), -1)
 
     img = frame.copy()
     blur = cv2.blur(img, (4, 4))
 
     hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-    gray = cv2.cvtColor(hsv, cv2.COLOR_BGR2GRAY)
 
     l_h = cv2.getTrackbarPos("Lower_H", "HSV Adjustments")
     l_s = cv2.getTrackbarPos("Lower_S", "HSV Adjustments")
@@ -63,8 +73,8 @@ while True:
     lower_bound = np.array([l_h, l_s, l_v])
     upper_bound = np.array([u_h, u_s, u_v])
 
-    mask = cv2.inRange(hsv, lower_bound, upper_bound)
-    # mask = cv2.inRange(hsv, (0,123,64), (109,255,255))
+    #mask = cv2.inRange(hsv, lower_bound, upper_bound)
+    mask = cv2.inRange(hsv, (0,210,23), (255,255,255))
     result = cv2.bitwise_and(frame, frame, mask=mask)
 
     # find all lemon contours in mask
@@ -73,6 +83,7 @@ while True:
 
     numContours = 0
     output = []
+    imgpoints = []
 
     # sort by x-coordinate of a countour (to get left-most to right-most)
     # when using the draw rectangle thing use the center coordinates of the right-most and left-most tape contours
@@ -80,6 +91,9 @@ while True:
     # function that will ultimately help return the x-coordinate of a contour later
     def leftToRight(array):
         return array[1]
+
+    def leftToRight2(array):
+        return array[0]
 
     if len(contours) != 0:
         for c in contours:
@@ -90,8 +104,15 @@ while True:
             else:
                 cx, cy = 0, 0
             center = (cx, cy)
+
             output.append([c, cx, cy, center])
+            calibrate2.imgpoints.append(center)
         output.sort(key=leftToRight)
+        imgpoints.sort(key=leftToRight2)
+        imgpoints = imgpoints[0:3]
+
+        # Calibrate in real time
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, mask.shape[::-1], None, None)
 
         # find the bounding rectangles for the leftmost and rightmost reflective tape contours
         leftmost_info = output[0]
@@ -110,12 +131,14 @@ while True:
         # ---------------------------------------------------------------------------------------
 
         # find the rays from the camera center to P1 and P2, which are points on the hub outline
-        r1 = config.inverse_mat([xl, yl - (hl/2), 1.0])
-        r2 = config.inverse_mat([xr + wr, yr - (hr/2), 1.0])
+        r1 = config.inverse_mat.dot([xl, yl + (hl/2), 1.0])
+        r2 = config.inverse_mat.dot([xr + wr, yr + (hr/2), 1.0])
 
         # Use dot product to find the angle between the two rays
-        cos_angle = r1.dot(r2) / (np.linalg.norm(r1) * np.linalg.norm(r2))
-        #angle_radians = np.acos(cos_angle)
+        cos_angle = (r1.dot(r2) / (np.linalg.norm(r1) * np.linalg.norm(r2)))
+        print("angle: " + str(cos_angle))
+        angle_radians = math.acos(cos_angle)
+        print("angle2: " + str(angle_radians))
 
         # Find the distance to the target. This calculation is dependent upon the assumption that the angles and
         # distance are on a plane that is parallel to the top of the hub; we have not yet considered height
@@ -125,18 +148,23 @@ while True:
         linear_dist_to_target = math.sqrt((frontal_dist_to_target * frontal_dist_to_target)
                                           + (config.tall_hub_height * config.tall_hub_height))
 
+        #linear_dist_to_target = frontal_dist_to_target
+
         print("linear distance to target: " + str(linear_dist_to_target))
 
         # draw the 'human' left-most contour (in green)
-        cv2.rectangle(frame, (xl, yl), (xl + wl, yl + hl), (0, 255, 0), 3)
+        cv2.rectangle(frame, (xl, yl), (xl + wl, yl + hl), (0, 255, 0), 2)
         # draw the 'human' right-most contour (in green)
-        cv2.rectangle(frame, (xr, yr), (xr + wr, yr + hr), (0, 255, 0), 3)
+        cv2.rectangle(frame, (xr, yr), (xr + wr, yr + hr), (0, 255, 0), 2)
         # draw the 'human' whole hub contour (in green)
-        cv2.rectangle(frame, (xl, yl), (xr + wr, yr + hr), (0, 255, 0), 3)
+        cv2.rectangle(frame, (xl, yl), (xr + wr, yr + hr), (0, 255, 0), 2)
 
         # draw the centers of the leftmost and rightmost contours
-        cv2.circle(frame, leftmost_info[3], 7, (0, 255, 0), -1)
-        cv2.circle(frame, rightmost_info[3], 7, (0, 255, 0), -1)
+        cv2.circle(frame, leftmost_info[3], 2, (0, 255, 0), -1)
+        cv2.circle(frame, rightmost_info[3], 2, (0, 255, 0), -1)
+        cv2.circle(frame, cam_center, 2, (0, 255, 0), -1)
+        cv2.circle(frame, (int(xl), int(yl + (hl/2))), 7, (0, 255, 0), -1)
+        cv2.circle(frame, (int(xr + wr), int(yr + (hr/2))), 7, (0, 255, 0), -1)
 
     cv2.imshow('Original', frame)
     cv2.imshow('Mask', mask)
@@ -149,4 +177,3 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
-
